@@ -1,34 +1,64 @@
 import React, { useState, useRef } from 'react'
 import "../style/home.scss"
 import { useInterview } from '../hooks/useInterview.js'
-import { useNavigate } from 'react-router'
+import { useNavigate } from 'react-router-dom'
 
 const Home = () => {
-
-    const { loading, generateReport,reports } = useInterview()
-    const [ jobDescription, setJobDescription ] = useState("")
-    const [ selfDescription, setSelfDescription ] = useState("")
+    // 1. Hook and State Management
+    const { loading, generateReport, reports } = useInterview()
+    const [jobDescription, setJobDescription] = useState("")
+    const [selfDescription, setSelfDescription] = useState("")
+    const [fileName, setFileName] = useState("") // Tracks uploaded file name for UI
     const resumeInputRef = useRef()
-
     const navigate = useNavigate()
 
+    // 2. Handle the Generation Logic
     const handleGenerateReport = async () => {
-        const resumeFile = resumeInputRef.current.files[ 0 ]
-        const data = await generateReport({ jobDescription, selfDescription, resumeFile })
-        navigate(`/interview/${data._id}`)
+        // Validation: Job Description is mandatory
+        if (!jobDescription.trim()) {
+            alert("Please paste a Job Description to proceed.");
+            return;
+        }
+
+        const resumeFile = resumeInputRef.current.files[0];
+        
+        // Validation: Must have either a Resume OR a Self-Description
+        if (!resumeFile && !selfDescription.trim()) {
+            alert("Please upload a resume or provide a quick self-description.");
+            return;
+        }
+
+        // Call generateReport from our custom useInterview hook
+        const data = await generateReport({ jobDescription, selfDescription, resumeFile });
+
+        // CRITICAL SAFETY CHECK: Only navigate if the backend returned a successful object
+        if (data && data._id) {
+            navigate(`/interview/${data._id}`);
+        } else {
+            // This handles cases where the AI service hits a quota limit (429) or error (400)
+            alert("The AI service is currently busy or encountered an error. Please wait 20 seconds and try again.");
+        }
     }
 
+    // Update UI when a file is selected
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) setFileName(file.name);
+    }
+
+    // 3. Loading State UI
     if (loading) {
         return (
             <main className='loading-screen'>
-                <h1>Loading your interview plan...</h1>
+                <div className="loader-spinner"></div>
+                <h1>Analyzing your profile...</h1>
+                <p>Generating your personalized interview strategy. This usually takes about 30 seconds.</p>
             </main>
         )
     }
 
     return (
         <div className='home-page'>
-
             {/* Page Header */}
             <header className='page-header'>
                 <h1>Create Your Custom <span className='highlight'>Interview Plan</span></h1>
@@ -49,12 +79,13 @@ const Home = () => {
                             <span className='badge badge--required'>Required</span>
                         </div>
                         <textarea
-                            onChange={(e) => { setJobDescription(e.target.value) }}
+                            value={jobDescription}
+                            onChange={(e) => setJobDescription(e.target.value)}
                             className='panel__textarea'
-                            placeholder={`Paste the full job description here...\ne.g. 'Senior Frontend Engineer at Google requires proficiency in React, TypeScript, and large-scale system design...'`}
+                            placeholder={`Paste the full job description here...\ne.g. 'Looking for a MERN Stack Developer with experience in AWS and LangChain...'`}
                             maxLength={5000}
                         />
-                        <div className='char-counter'>0 / 5000 chars</div>
+                        <div className='char-counter'>{jobDescription.length} / 5000 chars</div>
                     </div>
 
                     {/* Vertical Divider */}
@@ -79,9 +110,16 @@ const Home = () => {
                                 <span className='dropzone__icon'>
                                     <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 16 12 12 8 16" /><line x1="12" y1="12" x2="12" y2="21" /><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" /></svg>
                                 </span>
-                                <p className='dropzone__title'>Click to upload or drag &amp; drop</p>
+                                <p className='dropzone__title'>{fileName || "Click to upload or drag & drop"}</p>
                                 <p className='dropzone__subtitle'>PDF or DOCX (Max 5MB)</p>
-                                <input ref={resumeInputRef} hidden type='file' id='resume' name='resume' accept='.pdf,.docx' />
+                                <input 
+                                    ref={resumeInputRef} 
+                                    onChange={handleFileChange} 
+                                    hidden 
+                                    type='file' 
+                                    id='resume' 
+                                    accept='.pdf,.docx' 
+                                />
                             </label>
                         </div>
 
@@ -92,11 +130,11 @@ const Home = () => {
                         <div className='self-description'>
                             <label className='section-label' htmlFor='selfDescription'>Quick Self-Description</label>
                             <textarea
-                                onChange={(e) => { setSelfDescription(e.target.value) }}
+                                value={selfDescription}
+                                onChange={(e) => setSelfDescription(e.target.value)}
                                 id='selfDescription'
-                                name='selfDescription'
                                 className='panel__textarea panel__textarea--short'
-                                placeholder="Briefly describe your experience, key skills, and years of experience if you don't have a resume handy..."
+                                placeholder="Describe your experience, key skills, and B.Tech projects if you don't have a resume handy..."
                             />
                         </div>
 
@@ -105,40 +143,43 @@ const Home = () => {
                             <span className='info-box__icon'>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" stroke="#1a1f27" strokeWidth="2" /><line x1="12" y1="16" x2="12.01" y2="16" stroke="#1a1f27" strokeWidth="2" /></svg>
                             </span>
-                            <p>Either a <strong>Resume</strong> or a <strong>Self Description</strong> is required to generate a personalized plan.</p>
+                            <p>Either a <strong>Resume</strong> or a <strong>Self Description</strong> is required for a personalized plan.</p>
                         </div>
                     </div>
                 </div>
 
                 {/* Card Footer */}
                 <div className='interview-card__footer'>
-                    <span className='footer-info'>AI-Powered Strategy Generation &bull; Approx 30s</span>
+                    <span className='footer-info'>AI-Powered &bull; Approx 30s processing time</span>
                     <button
                         onClick={handleGenerateReport}
-                        className='generate-btn'>
+                        className='generate-btn'
+                        disabled={loading}
+                    >
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" /></svg>
-                        Generate My Interview Strategy
+                        {loading ? "Generating Strategy..." : "Generate My Interview Strategy"}
                     </button>
                 </div>
             </div>
 
             {/* Recent Reports List */}
-            {reports.length > 0 && (
+            {reports && reports.length > 0 && (
                 <section className='recent-reports'>
                     <h2>My Recent Interview Plans</h2>
                     <ul className='reports-list'>
                         {reports.map(report => (
                             <li key={report._id} className='report-item' onClick={() => navigate(`/interview/${report._id}`)}>
-                                <h3>{report.title || 'Untitled Position'}</h3>
+                                <h3>{report.title || 'Untitled Session'}</h3>
                                 <p className='report-meta'>Generated on {new Date(report.createdAt).toLocaleDateString()}</p>
-                                <p className={`match-score ${report.matchScore >= 80 ? 'score--high' : report.matchScore >= 60 ? 'score--mid' : 'score--low'}`}>Match Score: {report.matchScore}%</p>
+                                <p className={`match-score ${report.matchScore >= 80 ? 'score--high' : report.matchScore >= 60 ? 'score--mid' : 'score--low'}`}>
+                                    Match Score: {report.matchScore}%
+                                </p>
                             </li>
                         ))}
                     </ul>
                 </section>
             )}
-
-            {/* Page Footer */}
+            
             <footer className='page-footer'>
                 <a href='#'>Privacy Policy</a>
                 <a href='#'>Terms of Service</a>
@@ -148,4 +189,4 @@ const Home = () => {
     )
 }
 
-export default Home
+export default Home;
