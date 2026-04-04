@@ -1,7 +1,15 @@
-# 🚀 SkillBridge AI
+## 🚀 SkillBridge AI
 
 SkillBridge AI is a full-stack, AI-powered career coaching platform designed to generate personalized interview strategies. By analyzing a user's self-description, target job description, and uploaded resume, the platform leverages Generative AI to provide targeted, actionable insights to help candidates ace their interviews.
+---
+## 🌐 Live Demo & Dashboard
 
+* **Live Application:** [https://skillbridge-ai-orpin.vercel.app](https://skillbridge-ai-orpin.vercel.app)
+* **Backend API Base:** [https://skillbridge-ai-bn9a.onrender.com](https://skillbridge-ai-bn9a.onrender.com)
+
+*(Note: The backend is hosted on Render's free tier. If the application has been inactive, the first request may take 30–50 seconds to "wake up" the server. Subsequent requests will be instant.)*
+
+---
 ## ✨ Features
 
 * **🤖 AI-Powered Interview Strategies:** Integrates with Google's Gemini 2.5 Flash model to generate comprehensive, context-aware interview preparation reports.
@@ -26,6 +34,33 @@ SkillBridge AI is a full-stack, AI-powered career coaching platform designed to 
 * Deployed on **Render**
 
 ---
+
+## 🏗️ Project Architecture
+
+SkillBridge AI utilizes a decoupled, microservice-style architecture ensuring separation of concerns, secure authentication, and scalable AI integration.
+
+```text
+                             REST API (HTTPS)       
+                            w/ Secure Cookies       
++-------------------+                              +-------------------+
+|                   |                              |                   |
+|   Frontend (UI)   | <==========================> |  Backend API      |
+|  (React / Vercel) |                              | (Express / Render)|
+|                   |                              |                   |
++-------------------+                              +-------------------+
+                                                      |             |
+                        Google Gen AI SDK             |             |  Mongoose (ODM)
+                      +-------------------------------+             +------------------+
+                      |                                                |
+                      v                                                v
+            +-------------------+                            +-------------------+
+            |                   |                            |                   |
+            |    AI Engine      |                            |     Database      |
+            | (Gemini 2.5 Flash)|                            | (MongoDB Atlas)   |
+            |                   |                            |                   |
+            +-------------------+                            +-------------------+
+
+```
 
 ## 🚦 Local Development Setup
 
