@@ -4,12 +4,14 @@ const cors = require("cors")
 
 const app = express()
 
+// 🚀 CRITICAL: Trust Render's proxy to allow "Secure" cookies
+app.set("trust proxy", 1); 
+
 app.use(express.json())
 app.use(cookieParser())
 
-// ── ADD THE EXACT URL FROM YOUR ERROR LOG HERE ──
 const allowedOrigins = [
-    "https://skillbridge-ai-orpin.vercel.app", // The one from your screenshot
+    "https://skillbridge-ai-orpin.vercel.app", 
     "https://skillbridge-ai.vercel.app",
     "https://skill-bridge-ai.vercel.app",
     "http://localhost:5173"
@@ -17,7 +19,6 @@ const allowedOrigins = [
 
 app.use(cors({
     origin: function (origin, callback) {
-        // Allow requests with no origin or those in our allowed list
         if (!origin || allowedOrigins.includes(origin) || origin.endsWith(".vercel.app")) {
             callback(null, true);
         } else {
