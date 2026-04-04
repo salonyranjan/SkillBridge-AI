@@ -1,7 +1,12 @@
 import axios from "axios";
 
+/**
+ * @description Axios instance configured to use the production URL on Vercel
+ * or the local URL during development.
+ */
 const api = axios.create({
-    baseURL: "http://localhost:3000",
+    // Use the environment variable from Vercel, fallback to localhost for dev
+    baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:3000",
     withCredentials: true,
 })
 
@@ -43,7 +48,7 @@ export const getAllInterviewReports = async () => {
  * @description Service to generate resume pdf based on user self description, resume content and job description.
  */
 export const generateResumePdf = async (interviewReportId) => {
-    // CRITICAL: Must be a GET request and must expect a "blob"
+    // CRITICAL: Must be a GET request and must expect a "blob" for file downloads
     const response = await api.get(`/api/interview/resume/pdf/${interviewReportId}`, {
         responseType: "blob"
     })
