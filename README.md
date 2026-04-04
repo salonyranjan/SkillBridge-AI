@@ -48,13 +48,12 @@ cd backend
 npm install
 ```
 ## Create a .env file in the backend directory:
-
-Code snippet
+```Code snippet
 PORT=3000
 MONGO_URI=your_mongodb_connection_string
 JWT_SECRET=your_secure_random_secret
 GOOGLE_GENAI_API_KEY=your_gemini_api_key
-
+```
 ## Start the backend development server:
 ```bash
 npm run dev
@@ -68,9 +67,9 @@ npm install
 ```
 ## Create a .env file in the frontend directory:
 
-Code snippet
+```Code snippet
 VITE_API_BASE_URL=http://localhost:3000
-
+```
 ## Start the Vite development server:
 ```bash
 npm run dev
