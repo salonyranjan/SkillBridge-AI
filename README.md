@@ -5,7 +5,7 @@ SkillBridge AI is a full-stack, AI-powered career coaching platform designed to 
 ---
 ## 🌐 Live Demo & Dashboard
 
-* **Live Application:** [https://skillbridge-ai-orpin.vercel.app](https://skill-bridge-ai-orpin.vercel.app/login)
+* **Live Application:** [https://skill-bridge-ai-orpin.vercel.app](https://skill-bridge-ai-orpin.vercel.app)
 * **Backend API Base:** [https://skillbridge-ai-bn9a.onrender.com](https://skillbridge-ai-bn9a.onrender.com)
 
 *(Note: The backend is hosted on Render's free tier. If the application has been inactive, the first request may take 30–50 seconds to "wake up" the server. Subsequent requests will be instant.)*
