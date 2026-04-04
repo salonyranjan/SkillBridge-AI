@@ -1,5 +1,6 @@
 # 🚀 SkillBridge AI
 An AI-powered career coaching platform that generates personalized interview strategies by analyzing job descriptions and user resumes. Built with React, Node.js, MongoDB, and the Google Gemini 2.5 Flash model, featuring a secure cross-origin microservice architecture.
+
 ---
 
 ## 💡 About This Project
