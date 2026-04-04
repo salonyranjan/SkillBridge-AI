@@ -6,8 +6,11 @@ const app = express()
 
 app.use(express.json())
 app.use(cookieParser())
+
+// ── UPDATE THIS SECTION ──
 app.use(cors({
-    origin: "http://localhost:5173",
+    // Replace this with your actual Vercel URL from your dashboard
+    origin: "https://skillbridge-ai.vercel.app", 
     credentials: true
 }))
 
@@ -19,7 +22,5 @@ const interviewRouter = require("./routes/interview.routes")
 /* using all the routes here */
 app.use("/api/auth", authRouter)
 app.use("/api/interview", interviewRouter)
-
-
 
 module.exports = app
