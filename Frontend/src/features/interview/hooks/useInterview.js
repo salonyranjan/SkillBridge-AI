@@ -1,4 +1,9 @@
-import { generateInterviewReport as apiGenerateReport, getInterviewReportById, getAllInterviewReports } from "../services/interview.api"
+import { 
+    generateInterviewReport as apiGenerateReport, 
+    getInterviewReportById, 
+    getAllInterviewReports,
+    generateResumePdf as apiDownloadPdf // Imported your fixed PDF API function
+} from "../services/interview.api"
 import { useContext, useEffect } from "react"
 import { InterviewContext } from "../interview.context"
 import { useParams } from "react-router-dom"
@@ -16,17 +21,16 @@ export const useInterview = () => {
         try {
             const response = await apiGenerateReport({ jobDescription, selfDescription, resumeFile })
             
-            // Success check: ensure response.interviewReport contains the saved DB object
             if (response && response.interviewReport && response.interviewReport._id) {
                 setReport(response.interviewReport)
                 return response.interviewReport
             }
         } catch (error) {
-            console.error("Generate Error:", error)
+            console.error("Generate Error:", error.response?.data?.message || error.message)
         } finally {
             setLoading(false)
         }
-        return null // Return null instead of crashing if backend fails
+        return null 
     }
 
     const getReports = async () => {
@@ -61,10 +65,41 @@ export const useInterview = () => {
         return null
     }
 
+    // ── PDF Download Logic ──
+    const getResumePdf = async (id) => {
+        try {
+            const pdfBlob = await apiDownloadPdf(id);
+
+            // Create a hidden link and force the browser to click it
+            const url = window.URL.createObjectURL(new Blob([pdfBlob]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `SkillBridge_Report_${id}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+
+            // Clean up memory
+            link.parentNode.removeChild(link);
+            window.URL.revokeObjectURL(url);
+
+        } catch (error) {
+            console.error("Download PDF Error:", error);
+            alert("Failed to download PDF. Please try again.");
+        } 
+    }
+
     useEffect(() => {
         if (interviewId) getReportById(interviewId);
         else getReports();
     }, [interviewId])
 
-    return { loading, report, reports, generateReport, getReports, getReportById }
+    return { 
+        loading, 
+        report, 
+        reports, 
+        generateReport, 
+        getReports, 
+        getReportById, 
+        getResumePdf // Exported so your button can use it
+    }
 }

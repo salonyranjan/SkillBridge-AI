@@ -1,79 +1,46 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-const { z } = require("zod");
-const { zodToJsonSchema } = require("zod-to-json-schema");
+const PDFDocument = require("pdfkit"); // Make sure you ran: npm install pdfkit
 
-// Initialize Google AI with your API Key
+// Initialize Google AI
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENAI_API_KEY);
 
 /**
- * Define the Structured Schema for the Interview Report
- */
-const interviewReportSchema = z.object({
-    matchScore: z.number().min(0).max(100),
-    technicalQuestions: z.array(z.object({
-        question: z.string(),
-        intention: z.string(),
-        answer: z.string()
-    })),
-    behavioralQuestions: z.array(z.object({
-        question: z.string(),
-        intention: z.string(),
-        answer: z.string()
-    })),
-    skillGaps: z.array(z.object({
-        skill: z.string(),
-        severity: z.enum(["low", "medium", "high"])
-    })),
-    preparationPlan: z.array(z.object({
-        day: z.number(),
-        focus: z.string(),
-        tasks: z.array(z.string())
-    })),
-    title: z.string()
-});
-
-/**
- * @description Generates the structured interview report with automatic retries.
+ * @description Generates the structured interview report using Gemini AI
  */
 async function generateInterviewReport({ resume, selfDescription, jobDescription }, retries = 3) {
-    // Using gemini-1.5-flash-latest for best Free Tier stability in 2026
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
-
-    // 1. Generate the JSON schema
-    const jsonSchema = zodToJsonSchema(interviewReportSchema);
-    
-    // 2. THE CRITICAL FIX: Google strictly rejects the request if $schema exists
-    delete jsonSchema.$schema; 
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const prompt = `Act as an expert Technical Recruiter. 
-    Analyze the Candidate (Resume: ${resume}, Summary: ${selfDescription}) 
-    against the Job Description: ${jobDescription}. 
-    Identify technical questions, behavioral questions, skill gaps, and a 5-day plan.`;
+    Analyze Candidate (Resume: ${resume || "None"}, Summary: ${selfDescription || "None"}) 
+    against Job: ${jobDescription}.
+
+    Return ONLY a valid JSON object. You MUST include real, detailed text for every single "answer" field. Do not leave any fields blank or missing. Use this exact structure:
+    {
+      "matchScore": 85,
+      "technicalQuestions": [{"question": "Write the question here", "intention": "Write the intention here", "answer": "Write the detailed expected answer here"}],
+      "behavioralQuestions": [{"question": "Write the question here", "intention": "Write the intention here", "answer": "Write the detailed expected answer here"}],
+      "skillGaps": [{"skill": "Skill name", "severity": "high"}],
+      "preparationPlan": [{"day": 1, "focus": "Focus area", "tasks": ["Task 1", "Task 2"]}],
+      "title": "Specific Job Title"
+    }`;
 
     for (let i = 0; i < retries; i++) {
         try {
-            const result = await model.generateContent({
-                contents: [{ role: "user", parts: [{ text: prompt }] }],
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: jsonSchema,
-                }
-            });
-
+            const result = await model.generateContent(prompt);
             const text = result.response.text();
-            // Safety: Clean markdown backticks if Gemini adds them
+            
+            // Clean markdown blocks if Gemini accidentally adds them
             const cleanJson = text.replace(/```json|```/g, "").trim();
             return JSON.parse(cleanJson);
 
         } catch (error) {
-            // Handle Quota (429) or Service Busy (503/UNAVAILABLE)
-            const isTransient = error.message?.includes("429") || error.code === 503 || error.status === 'UNAVAILABLE';
-            
-            if (isTransient && i < retries - 1) {
-                const wait = 10000 * (i + 1); // 10s delay to clear free tier limits
-                console.warn(`AI Service busy. Retry ${i+1} in ${wait/1000}s...`);
-                await new Promise(r => setTimeout(r, wait));
-                continue;
+            // Handle Quota/Busy errors (429)
+            if (error.status === 429 || error.status === 503) {
+                if (i < retries - 1) {
+                    console.warn(`AI Busy or Rate Limited. Retrying in 10 seconds...`);
+                    await new Promise(r => setTimeout(r, 10000));
+                    continue;
+                }
             }
             console.error("AI Service Final Failure:", error.message);
             throw error;
@@ -81,4 +48,62 @@ async function generateInterviewReport({ resume, selfDescription, jobDescription
     }
 }
 
-module.exports = { generateInterviewReport };
+/**
+ * @description Generates a valid PDF buffer using pdfkit
+ */
+async function generateResumePdf({ resume, jobDescription, selfDescription }) {
+    return new Promise((resolve, reject) => {
+        try {
+            const doc = new PDFDocument({ margin: 50 });
+            const buffers = [];
+
+            doc.on('data', buffers.push.bind(buffers));
+            doc.on('end', () => {
+                const pdfData = Buffer.concat(buffers);
+                resolve(pdfData);
+            });
+
+            // ── Text Sanitizer to prevent PDF crashes & weird characters ──
+            const cleanText = (text) => {
+                if (!text || text.trim() === "") return "Not provided.";
+                return text
+                    .replace(/\r/g, "") // Removes Windows carriage returns
+                    .replace(/[\u2018\u2019]/g, "'") // Fixes smart single quotes
+                    .replace(/[\u201C\u201D]/g, '"') // Fixes smart double quotes
+                    .replace(/[\u2013\u2014]/g, "-") // Fixes long dashes
+                    .replace(/[^\x00-\x7F\n]/g, " ") // Replaces any remaining weird symbols with a space
+                    .trim();
+            };
+
+            // Build PDF Content
+            doc.fontSize(24).fillColor('#004e92').text('SkillBridge AI', { align: 'center' });
+            doc.fontSize(14).fillColor('#333333').text('Interview Preparation Report', { align: 'center' });
+            doc.moveDown(2);
+
+            // Candidate Summary
+            doc.fontSize(16).fillColor('#000000').text('Candidate Summary', { underline: true });
+            doc.moveDown(0.5);
+            doc.fontSize(11).fillColor('#444444').text(cleanText(selfDescription));
+            doc.moveDown(1.5);
+
+            // Target Role (Job Description)
+            doc.fontSize(16).fillColor('#000000').text('Target Role', { underline: true });
+            doc.moveDown(0.5);
+            doc.fontSize(11).fillColor('#444444').text(cleanText(jobDescription));
+            doc.moveDown(1.5);
+
+            // Resume Extracted Text
+            doc.fontSize(16).fillColor('#000000').text('Analyzed Resume Content', { underline: true });
+            doc.moveDown(0.5);
+            doc.fontSize(10).fillColor('#666666').text(cleanText(resume));
+
+            // Finalize PDF
+            doc.end();
+
+        } catch (error) {
+            reject(error);
+        }
+    });
+}
+
+module.exports = { generateInterviewReport, generateResumePdf };

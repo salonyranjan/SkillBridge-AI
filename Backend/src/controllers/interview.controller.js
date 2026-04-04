@@ -1,69 +1,59 @@
-const PDFParser = require("pdf2json");
+const pdfParse = require("pdf-parse");
 const { generateInterviewReport, generateResumePdf } = require("../services/ai.service");
 const interviewReportModel = require("../models/interviewReport.model");
 
 /**
- * @description Controller to generate interview report using pdf2json for stability.
+ * @description Controller to generate interview report based on user self description, resume and job description.
  */
 async function generateInterViewReportController(req, res) {
     try {
-        // 1. Initial Checks
-        if (!req.file || !req.file.buffer) {
-            return res.status(400).json({ message: "No resume PDF uploaded." });
-        }
+        const { selfDescription, jobDescription } = req.body;
+        let resumeText = "No resume provided.";
 
-        const { selfDescription, jobDescription, title } = req.body;
-
-        if (!title || !jobDescription) {
-            return res.status(400).json({ 
-                message: "Missing required fields: 'title' and 'jobDescription' are mandatory." 
-            });
-        }
-
-        // 2. Parse PDF using pdf2json (More stable for Node v23)
-        let resumeText = "";
-        try {
-            const pdfParser = new PDFParser(null, 1); // '1' flag extracts raw text
-
-            resumeText = await new Promise((resolve, reject) => {
-                pdfParser.on("pdfParser_dataError", errData => reject(errData.parserError));
-                pdfParser.on("pdfParser_dataReady", () => {
-                    resolve(pdfParser.getRawTextContent());
-                });
-                pdfParser.parseBuffer(req.file.buffer);
-            });
-
-            if (!resumeText || resumeText.trim().length === 0) {
-                return res.status(400).json({ message: "PDF contains no readable text." });
+        // Safely parse the PDF. Handles both direct function and .default nesting.
+        if (req.file && req.file.buffer) {
+            try {
+                const parsePdf = pdfParse.default ? pdfParse.default : pdfParse;
+                const resumeContent = await (new parsePdf.PDFParse(Uint8Array.from(req.file.buffer))).getText();
+                resumeText = resumeContent.text ? resumeContent.text : resumeContent;
+            } catch (pdfError) {
+                console.error("PDF Parsing Warning:", pdfError.message);
+                resumeText = "Could not parse uploaded PDF.";
             }
-        } catch (pdfErr) {
-            console.error("PDF Parsing Error:", pdfErr);
-            return res.status(400).json({ message: "Failed to extract text from PDF." });
         }
 
-        // 3. AI Service Call (Handles Gemini 503 Busy error)
-        let interViewReportByAi;
-        try {
-            interViewReportByAi = await generateInterviewReport({
-                resume: resumeText,
-                selfDescription,
-                jobDescription
-            });
-        } catch (aiError) {
-            const status = (aiError.code === 503 || aiError.status === 'UNAVAILABLE') ? 503 : 500;
-            return res.status(status).json({ 
-                message: "AI Service is currently busy. Please try again in a few seconds." 
-            });
-        }
+        // 1. Call Gemini AI
+        const interViewReportByAi = await generateInterviewReport({
+            resume: resumeText,
+            selfDescription,
+            jobDescription
+        });
 
-        // 4. Save to Database
+        // 2. SAFETY MAPPING: Guarantee that 'answer' and other required fields always exist
+        const safeTechnicalQuestions = (interViewReportByAi.technicalQuestions || []).map(q => ({
+            question: q.question || "Question not generated",
+            intention: q.intention || "Intention not generated",
+            answer: q.answer || "Expected answer not provided by AI."
+        }));
+
+        const safeBehavioralQuestions = (interViewReportByAi.behavioralQuestions || []).map(q => ({
+            question: q.question || "Question not generated",
+            intention: q.intention || "Intention not generated",
+            answer: q.answer || "Expected answer not provided by AI."
+        }));
+
+        // 3. Save to Database
         const interviewReport = await interviewReportModel.create({
             user: req.user.id,
-            title,
             resume: resumeText,
             selfDescription,
             jobDescription,
-            ...interViewReportByAi
+            title: interViewReportByAi.title || "Interview Plan",
+            matchScore: interViewReportByAi.matchScore || 0,
+            technicalQuestions: safeTechnicalQuestions,
+            behavioralQuestions: safeBehavioralQuestions,
+            skillGaps: interViewReportByAi.skillGaps || [],
+            preparationPlan: interViewReportByAi.preparationPlan || []
         });
 
         res.status(201).json({
@@ -72,61 +62,65 @@ async function generateInterViewReportController(req, res) {
         });
 
     } catch (error) {
-        console.error("Global Controller Error:", error);
-        res.status(500).json({ message: "Internal server error." });
+        console.error("Generate Report Error:", error.message);
+        res.status(500).json({ message: "Failed to generate report: " + error.message });
     }
 }
 
 /**
- * @description Get report by ID
+ * @description Controller to get interview report by interviewId.
  */
 async function getInterviewReportByIdController(req, res) {
     try {
         const { interviewId } = req.params;
-        const report = await interviewReportModel.findOne({ _id: interviewId, user: req.user.id });
-        if (!report) return res.status(404).json({ message: "Report not found." });
-        res.status(200).json({ message: "Report fetched.", interviewReport: report });
+        const interviewReport = await interviewReportModel.findOne({ _id: interviewId, user: req.user.id });
+
+        if (!interviewReport) return res.status(404).json({ message: "Interview report not found." });
+
+        res.status(200).json({ message: "Fetched successfully.", interviewReport });
     } catch (error) {
-        res.status(500).json({ message: "Error fetching report." });
+        res.status(500).json({ message: "Server error while fetching report." });
     }
 }
 
-/**
- * @description Get all reports for user
+/** * @description Controller to get all interview reports of logged in user.
  */
 async function getAllInterviewReportsController(req, res) {
     try {
-        const reports = await interviewReportModel.find({ user: req.user.id })
+        const interviewReports = await interviewReportModel
+            .find({ user: req.user.id })
             .sort({ createdAt: -1 })
             .select("-resume -selfDescription -jobDescription -__v -technicalQuestions -behavioralQuestions -skillGaps -preparationPlan");
-        res.status(200).json({ message: "Reports fetched.", interviewReports: reports });
+
+        res.status(200).json({ message: "Fetched successfully.", interviewReports });
     } catch (error) {
-        res.status(500).json({ message: "Error fetching reports." });
+        res.status(500).json({ message: "Server error while fetching reports." });
     }
 }
 
 /**
- * @description Generate Resume PDF
+ * @description Controller to generate resume PDF.
  */
 async function generateResumePdfController(req, res) {
     try {
         const { interviewReportId } = req.params;
-        const report = await interviewReportModel.findById(interviewReportId);
-        if (!report) return res.status(404).json({ message: "Report not found." });
+        const interviewReport = await interviewReportModel.findById(interviewReportId);
 
-        const pdfBuffer = await generateResumePdf({ 
-            resume: report.resume, 
-            jobDescription: report.jobDescription, 
-            selfDescription: report.selfDescription 
+        if (!interviewReport) return res.status(404).json({ message: "Report not found." });
+
+        const pdfBuffer = await generateResumePdf({
+            resume: interviewReport.resume, 
+            jobDescription: interviewReport.jobDescription, 
+            selfDescription: interviewReport.selfDescription 
         });
 
         res.set({
             "Content-Type": "application/pdf",
-            "Content-Disposition": `attachment; filename=resume_${interviewReportId}.pdf`
+            "Content-Disposition": `attachment; filename="resume_${interviewReportId}.pdf"`
         });
         res.send(pdfBuffer);
     } catch (error) {
-        res.status(500).json({ message: "PDF Generation failed." });
+        res.status(500).json({ message: "Failed to generate PDF." });
     }
 }
 

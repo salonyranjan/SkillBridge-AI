@@ -1,4 +1,5 @@
 @use "sass:color";
+
 // ── Shared Variables (mirrors home.scss theme) ────────────────────────────────
 $bg-page: #0d1117;
 $bg-card: #161b22;
@@ -60,9 +61,6 @@ $severity-low: #3fb950;
     justify-content: space-between;
     gap: 0.25rem;
 
-
-
-
     &__label {
         font-size: 0.7rem;
         font-weight: 600;
@@ -121,13 +119,6 @@ $severity-low: #3fb950;
     padding-bottom: 5rem;
     align-items: flex-start;
 
-
-
-
-
-
-
-
     section {
         min-height: 100%;
     }
@@ -174,6 +165,7 @@ $severity-low: #3fb950;
 
     &:hover {
        border-color: color.adjust($border-color, $lightness: 8%);
+    } // ✅ THIS BRACE WAS MISSING!
 
     &__header {
         display: flex;
@@ -476,5 +468,4 @@ $severity-low: #3fb950;
         background-color: rgba($severity-low, 0.1);
         border-color: rgba($severity-low, 0.25);
     }
-}
 }
